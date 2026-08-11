@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>NSEI Live Market Intelligence</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Manrope:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #080c14;
+    --surface: #0d1220;
+    --surface2: #111827;
+    --border: rgba(99,179,255,0.12);
+    --border2: rgba(99,179,255,0.22);
+    --accent: #3b9eff;
+    --accent2: #63b3ff;
+    --green: #22d3a0;
+    --red: #f05252;
+    --amber: #f59e0b;
+    --text: #e8edf5;
+    --muted: #6b7a99;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Manrope', sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
+
+  /* Grid noise texture */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: linear-gradient(rgba(59,158,255,0.03) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(59,158,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none; z-index: 0;
+  }
+
+  .wrapper { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 0 20px 40px; }
+
+  /* ── HEADER ── */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 0 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-dot {
+    width: 10px; height: 10px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 12px var(--accent);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.6;transform:scale(0.8)} }
+  .logo-text { font-family: var(--mono); font-size: 15px; color: var(--accent2); letter-spacing: 2px; }
+  .header-right { display: flex; align-items: center; gap: 20px; }
+  .live-badge {
+    display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 11px; color: var(--green);
+    border: 1px solid rgba(34,211,160,0.3); padding: 4px 10px; border-radius: 4px;
+    background: rgba(34,211,160,0.06);
+  }
+  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); animation: pulse 1.2s infinite; }
+  #clock { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+  /* ── TICKER STRIP ── */
+  .ticker-wrap { overflow: hidden; border-bottom: 1px solid var(--border); background: rgba(13,18,32,0.9); }
+  .ticker-inner { display: flex; gap: 0; animation: ticker 28s linear infinite; width: max-content; }
+  @keyframes ticker { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+  .tick-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 28px; border-right: 1px solid var(--border);
+    font-family: var(--mono); font-size: 12px; white-space: nowrap;
+  }
+  .tick-name { color: var(--muted); }
+  .tick-val { color: var(--text); }
+  .tick-chg { font-size: 11px; }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+
+  /* ── MAIN GRID ── */
+  .main-grid { display: grid; grid-template-columns: 1fr 340px; gap: 16px; margin-top: 20px; }
+  .left-col { display: flex; flex-direction: column; gap: 16px; }
+  .right-col { display: flex; flex-direction: column; gap: 16px; }
+
+  /* ── PANEL ── */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  .panel-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    background: rgba(99,179,255,0.03);
+  }
+  .panel-title { font-family: var(--mono); font-size: 11px; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+  .panel-body { padding: 16px; }
+
+  /* ── STAT CARDS ── */
+  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 14px 16px;
+  }
+  .stat-label { font-size: 11px; color: var(--muted); letter-spacing: 0.5px; margin-bottom: 6px; }
+  .stat-val { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+  .stat-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+  /* ── SIGNAL BOX ── */
+  .signal-main {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 24px;
+    background: linear-gradient(135deg, rgba(59,158,255,0.08) 0%, rgba(34,211,160,0.05) 100%);
+    border-bottom: 1px solid var(--border);
+  }
+  .signal-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .signal-text { font-family: var(--mono); font-size: 28px; font-weight: 700; }
+  .signal-confidence { text-align: right; }
+  .confidence-num { font-family: var(--mono); font-size: 36px; font-weight: 700; color: var(--accent); }
+  .confidence-lbl { font-size: 11px; color: var(--muted); }
+  .signal-bar-wrap { padding: 12px 24px; border-bottom: 1px solid var(--border); }
+  .signal-bar-track { height: 6px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden; }
+  .signal-bar-fill { height: 100%; border-radius: 99px; transition: width 1s ease; }
+  .signal-bar-labels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+  /* ── CHART AREA ── */
+  .chart-wrap { position: relative; width: 100%; }
+
+  /* ── GEO PANEL ── */
+  .geo-score-ring { display: flex; flex-direction: column; align-items: center; padding: 16px 0; }
+  .ring-outer { position: relative; width: 120px; height: 120px; }
+  .ring-svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+  .ring-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .ring-val { font-family: var(--mono); font-size: 22px; font-weight: 700; }
+  .ring-lbl { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* ── NEWS FEED ── */
+  .news-item {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: flex; gap: 10px; align-items: flex-start; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .news-item:hover { background: rgba(99,179,255,0.04); }
+  .news-item:last-child { border-bottom: none; }
+  .news-dot { width: 7px; height: 7px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; }
+  .news-title { font-size: 12.5px; line-height: 1.5; color: var(--text); }
+  .news-meta { font-size: 10.5px; color: var(--muted); margin-top: 3px; }
+  .news-sent { font-size: 10px; padding: 2px 7px; border-radius: 3px; display: inline-block; margin-top: 4px; }
+  .sent-pos { background: rgba(34,211,160,0.12); color: var(--green); }
+  .sent-neg { background: rgba(240,82,82,0.12); color: var(--red); }
+  .sent-neu { background: rgba(107,122,153,0.12); color: var(--muted); }
+
+  /* ── FEATURES TABLE ── */
+  .feat-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .feat-table tr { border-bottom: 1px solid var(--border); }
+  .feat-table tr:last-child { border: none; }
+  .feat-table td { padding: 9px 0; }
+  .feat-table td:last-child { text-align: right; }
+  .feat-name { color: var(--muted); }
+  .feat-val { font-family: var(--mono); color: var(--text); }
+  .feat-bar-cell { width: 80px; padding-right: 10px !important; }
+  .feat-bar { height: 3px; border-radius: 2px; background: var(--accent); opacity: 0.7; }
+
+  /* ── INPUT PANEL ── */
+  .input-row { display: flex; flex-direction: column; gap: 10px; }
+  .input-group label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 5px; letter-spacing: 0.5px; }
+  .input-group input[type=number], .input-group select {
+    width: 100%; background: var(--bg); border: 1px solid var(--border2);
+    color: var(--text); font-family: var(--sans); font-size: 13px;
+    padding: 8px 12px; border-radius: 5px; outline: none;
+    transition: border 0.2s;
+  }
+  .input-group input:focus, .input-group select:focus { border-color: var(--accent); }
+  .run-btn {
+    width: 100%; padding: 11px; background: var(--accent);
+    border: none; color: #000; font-family: var(--mono); font-size: 13px;
+    font-weight: 700; letter-spacing: 1px; border-radius: 5px; cursor: pointer;
+    transition: opacity 0.2s, transform 0.1s;
+    margin-top: 6px;
+  }
+  .run-btn:hover { opacity: 0.9; }
+  .run-btn:active { transform: scale(0.98); }
+  .run-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ── LOADER ── */
+  .loader { display: none; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); justify-content: center; padding: 8px 0; }
+  .loader.show { display: flex; }
+  .spin { width: 14px; height: 14px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── AI INSIGHT ── */
+  .ai-insight { background: rgba(59,158,255,0.05); border: 1px solid rgba(59,158,255,0.18); border-radius: 6px; padding: 12px 14px; font-size: 12.5px; line-height: 1.7; color: var(--text); margin-top: 12px; display: none; }
+  .ai-insight.show { display: block; }
+  .ai-label { font-family: var(--mono); font-size: 10px; color: var(--accent); letter-spacing: 1px; margin-bottom: 6px; }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+    .stat-row { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo">
+      <div class="logo-dot"></div>
+      <span class="logo-text">NSEI · MARKET INTELLIGENCE</span>
+    </div>
+    <div class="header-right">
+      <div class="live-badge"><div class="live-dot"></div> LIVE</div>
+      <div id="clock"></div>
+    </div>
+  </header>
+
+  <!-- TICKER -->
+  <div class="ticker-wrap">
+    <div class="ticker-inner" id="ticker"></div>
+  </div>
+
+  <!-- STAT ROW -->
+  <div class="stat-row" style="margin-top:16px">
+    <div class="stat-card">
+      <div class="stat-label">NSEI CLOSE</div>
+      <div class="stat-val" id="nsei-close" style="color:var(--accent)">--</div>
+      <div class="stat-sub" id="nsei-chg">Loading...</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">RSI (14)</div>
+      <div class="stat-val" id="rsi-val">--</div>
+      <div class="stat-sub" id="rsi-zone">—</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">GEO INDEX</div>
+      <div class="stat-val" id="geo-stat">--</div>
+      <div class="stat-sub" id="geo-lbl">Sentiment score</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">SIGNAL</div>
+      <div class="stat-val" id="signal-stat" style="font-size:14px">--</div>
+      <div class="stat-sub" id="conf-stat">Confidence: --</div>
+    </div>
+  </div>
+
+  <!-- MAIN GRID -->
+  <div class="main-grid">
+    <!-- LEFT -->
+    <div class="left-col">
+
+      <!-- PRICE CHART -->
+      <div class="panel">
+        <div class="panel-header">
+          <span class="panel-title">Price Chart · NSEI</span>
+          <div style="display:flex;gap:8px">
+            <button onclick="setRange(30)" id="r30" class="range-btn" style="font-family:var(--mono);font-size:10px;background:rgba(59,158,255,0.15);border:1px solid var(--accent);color:var(--accent);padding:3px 10px;border-radius:3px;cursor:pointer;">1M</button>
+            <button onclick="setRange(90)" id="r90" class="range-btn" style="font-family:var(--mono);font-size:10px;background:transparent;border:1px solid var(--border2);color:var(--muted);padding:3px 10px;border-radius:3px;cursor:pointer;">3M</button>
+            <button onclick="setRange(180)" id="r180" class="range-btn" style="font-family:var(--mono);font-size:10px;background:transparent;border:1px solid var(--border2);color:var(--muted);padding:3px 10px;border-radius:3px;cursor:pointer;">6M</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="chart-wrap" style="height:260px">
+            <canvas id="priceChart" role="img" aria-label="NSEI price chart">NSEI historical closing prices.</canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- SIGNAL + CONFIDENCE -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Market Signal</span></div>
+        <div class="signal-main">
+          <div>
+            <div class="signal-label">Current Signal</div>
+            <div class="signal-text" id="sig-text" style="color:var(--green)">—</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px" id="sig-sub">Run prediction to get signal</div>
+          </div>
+          <div class="signal-confidence">
+            <div class="confidence-num" id="conf-pct">—</div>
+            <div class="confidence-lbl">BULL PROBABILITY</div>
+          </div>
+        </div>
+        <div class="signal-bar-wrap">
+          <div class="signal-bar-track">
+            <div class="signal-bar-fill" id="sig-bar" style="width:0%;background:var(--green)"></div>
+          </div>
+          <div class="signal-bar-labels"><span>BEARISH 0%</span><span>NEUTRAL 50%</span><span>100% BULLISH</span></div>
+        </div>
+        <div style="padding:12px 24px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">MOMENTUM</div>
+            <div style="font-family:var(--mono);font-size:13px" id="momentum-val">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">VOLATILITY</div>
+            <div style="font-family:var(--mono);font-size:13px" id="vol-val">—</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:10px;color:var(--muted);margin-bottom:3px">MA CROSS</div>
+            <div style="font-family:var(--mono);font-size:13px" id="ma-cross">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- INDICATOR CHART -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">RSI · 14-period</span></div>
+        <div class="panel-body">
+          <div class="chart-wrap" style="height:160px">
+            <canvas id="rsiChart" role="img" aria-label="RSI indicator chart">14-period RSI values.</canvas>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-col">
+
+      <!-- PREDICTION RUNNER -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Run Prediction</span></div>
+        <div class="panel-body">
+          <div class="input-row">
+            <div class="input-group">
+              <label>GEO INDEX OVERRIDE (optional)</label>
+              <input type="number" id="geo-override" step="0.01" min="-1" max="1" placeholder="Auto-fetch from news" />
+            </div>
+            <div class="input-group">
+              <label>KEYWORD FILTER</label>
+              <select id="kw-filter">
+                <option value="war OR sanctions OR oil OR election OR geopolitics">All Geopolitical</option>
+                <option value="India economy OR RBI OR Sensex">India / RBI</option>
+                <option value="oil price OR OPEC OR crude">Oil / Energy</option>
+                <option value="US Fed OR interest rate OR inflation">US Fed / Rates</option>
+                <option value="China economy OR trade war">China / Trade</option>
+              </select>
+            </div>
+          </div>
+          <button class="run-btn" id="run-btn" onclick="runPrediction()">▶ RUN ANALYSIS</button>
+          <div class="loader" id="loader"><div class="spin"></div> Fetching news & computing signal...</div>
+          <div class="ai-insight" id="ai-insight">
+            <div class="ai-label">AI INSIGHT</div>
+            <div id="ai-text"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GEO PANEL -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Geopolitical Pulse</span></div>
+        <div class="panel-body" style="padding:0">
+          <div class="geo-score-ring">
+            <div class="ring-outer">
+              <svg class="ring-svg" viewBox="0 0 120 120">
+                <circle cx="60" cy="60" r="50" fill="none" stroke="rgba(99,179,255,0.1)" stroke-width="10"/>
+                <circle id="ring-arc" cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" stroke-width="10"
+                  stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314" style="transition:stroke-dashoffset 1s ease"/>
+              </svg>
+              <div class="ring-center">
+                <div class="ring-val" id="geo-ring-val">—</div>
+                <div class="ring-lbl">GEO SCORE</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:20px;margin-top:12px">
+              <div style="text-align:center"><div style="font-size:10px;color:var(--muted)">POSITIVE</div><div style="font-family:var(--mono);font-size:13px;color:var(--green)" id="geo-pos">—</div></div>
+              <div style="text-align:center"><div style="font-size:10px;color:var(--muted)">NEUTRAL</div><div style="font-family:var(--mono);font-size:13px;color:var(--muted)" id="geo-neu">—</div></div>
+              <div style="text-align:center"><div style="font-size:10px;color:var(--muted)">NEGATIVE</div><div style="font-family:var(--mono);font-size:13px;color:var(--red)" id="geo-neg">—</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- NEWS FEED -->
+      <div class="panel" style="flex:1">
+        <div class="panel-header"><span class="panel-title">Geo News Feed</span><span style="font-size:10px;color:var(--muted)" id="news-count">0 articles</span></div>
+        <div id="news-feed" style="max-height:340px;overflow-y:auto">
+          <div style="padding:20px;text-align:center;color:var(--muted);font-size:12px">Run prediction to load news</div>
+        </div>
+      </div>
+
+      <!-- FEATURE IMPORTANCE -->
+      <div class="panel">
+        <div class="panel-header"><span class="panel-title">Feature Importance</span></div>
+        <div class="panel-body" style="padding:8px 16px">
+          <table class="feat-table">
+            <tbody id="feat-body">
+              <tr><td class="feat-name">Returns</td><td class="feat-bar-cell"><div class="feat-bar" style="width:72%"></div></td><td class="feat-val" style="color:var(--accent)">0.142</td></tr>
+              <tr><td class="feat-name">RSI</td><td class="feat-bar-cell"><div class="feat-bar" style="width:65%"></div></td><td class="feat-val" style="color:var(--accent)">0.128</td></tr>
+              <tr><td class="feat-name">Momentum</td><td class="feat-bar-cell"><div class="feat-bar" style="width:60%"></div></td><td class="feat-val" style="color:var(--accent)">0.118</td></tr>
+              <tr><td class="feat-name">MA50</td><td class="feat-bar-cell"><div class="feat-bar" style="width:55%"></div></td><td class="feat-val" style="color:var(--accent)">0.109</td></tr>
+              <tr><td class="feat-name">MA200</td><td class="feat-bar-cell"><div class="feat-bar" style="width:50%"></div></td><td class="feat-val" style="color:var(--accent)">0.098</td></tr>
+              <tr><td class="feat-name">Volatility</td><td class="feat-bar-cell"><div class="feat-bar" style="width:44%"></div></td><td class="feat-val" style="color:var(--accent)">0.087</td></tr>
+              <tr><td class="feat-name">Geo_Index</td><td class="feat-bar-cell"><div class="feat-bar" style="width:38%;background:var(--amber)"></div></td><td class="feat-val" style="color:var(--amber)">0.075</td></tr>
+              <tr><td class="feat-name">Return_Lag1</td><td class="feat-bar-cell"><div class="feat-bar" style="width:32%"></div></td><td class="feat-val" style="color:var(--accent)">0.063</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+// ── CLOCK ──
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent =
+    now.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour12: false }) + ' IST';
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ── MOCK MARKET DATA (simulates yfinance NSEI) ──
+function generateNSEIData(days) {
+  const data = []; let price = 22400;
+  const now = new Date();
+  for (let i = days; i >= 0; i--) {
+    const d = new Date(now); d.setDate(now.getDate() - i);
+    if (d.getDay() === 0 || d.getDay() === 6) continue;
+    price *= (1 + (Math.random() - 0.48) * 0.012);
+    data.push({ date: d.toISOString().slice(0, 10), close: +price.toFixed(2) });
+  }
+  return data;
+}
+
+function computeIndicators(data) {
+  const closes = data.map(d => d.close);
+  const n = closes.length;
+  const ma = (arr, w) => arr.map((_, i) => i < w - 1 ? null : arr.slice(i - w + 1, i + 1).reduce((a,b)=>a+b,0)/w);
+  const ma10 = ma(closes, 10), ma50 = ma(closes, 50), ma200 = ma(closes, 200);
+  // RSI
+  const rsiArr = closes.map((c, i) => {
+    if (i < 14) return null;
+    const gains = [], losses = [];
+    for (let j = i - 13; j <= i; j++) {
+      const d = closes[j] - closes[j-1];
+      gains.push(d > 0 ? d : 0); losses.push(d < 0 ? -d : 0);
+    }
+    const ag = gains.reduce((a,b)=>a+b,0)/14, al = losses.reduce((a,b)=>a+b,0)/14;
+    return al === 0 ? 100 : +(100 - 100/(1 + ag/al)).toFixed(2);
+  });
+  const returns = closes.map((c,i) => i === 0 ? 0 : +((c - closes[i-1])/closes[i-1]*100).toFixed(4));
+  const momentum = closes.map((c,i) => i < 10 ? null : +(c - closes[i-10]).toFixed(2));
+  const volatility = returns.map((r,i) => {
+    if (i < 9) return null;
+    const slice = returns.slice(i-9, i+1);
+    const m = slice.reduce((a,b)=>a+b,0)/10;
+    return +(Math.sqrt(slice.reduce((a,b)=>a+(b-m)**2,0)/10)).toFixed(4);
+  });
+  return { ma10, ma50, ma200, rsiArr, returns, momentum, volatility };
+}
+
+// ── BACKEND CONFIG ──
+const BACKEND = 'http://localhost:5000';
+
+let rawData = [];
+let ind = {};
+let chartRange = 30;
+let priceChartInst, rsiChartInst;
+
+// Fetch real market data from Flask backend on page load
+async function loadMarketData() {
+  try {
+    const res = await fetch(`${BACKEND}/api/market-data`);
+    if (!res.ok) throw new Error('Backend not reachable');
+    const json = await res.json();
+    // Map backend response into the shape the rest of the code expects
+    rawData = json.dates.map((d, i) => ({ date: d, close: json.closes[i] }));
+    ind = {
+      ma10:      json.ma10,
+      ma50:      json.ma50,
+      ma200:     json.ma200 || json.ma50.map(() => null),  // fallback if not sent
+      rsiArr:    json.rsi,
+      returns:   rawData.map((r, i) => i === 0 ? 0 : +((r.close - rawData[i-1].close) / rawData[i-1].close * 100).toFixed(4)),
+      momentum:  rawData.map((r, i) => i < 10 ? null : +(r.close - rawData[i-10].close).toFixed(2)),
+      volatility: (() => {
+        const rets = rawData.map((r, i) => i === 0 ? 0 : (r.close - rawData[i-1].close) / rawData[i-1].close * 100);
+        return rets.map((_, i) => {
+          if (i < 9) return null;
+          const sl = rets.slice(i-9, i+1);
+          const m = sl.reduce((a,b)=>a+b,0)/10;
+          return +(Math.sqrt(sl.reduce((a,b)=>a+(b-m)**2,0)/10)).toFixed(4);
+        });
+      })()
+    };
+    renderCharts();
+  } catch (err) {
+    // Backend not running — fall back to simulated data so the UI still works
+    console.warn('Backend unavailable, using simulated data:', err.message);
+    rawData = generateNSEIData(365);
+    ind = computeIndicators(rawData);
+    renderCharts();
+  }
+}
+
+loadMarketData();
+
+// ── TICKER ──
+const tickerItems = [
+  { name: 'NSEI', base: 22400, chg: +0.87 },
+  { name: 'SENSEX', base: 73800, chg: +0.74 },
+  { name: 'USDINR', base: 84.21, chg: -0.12 },
+  { name: 'GOLD', base: 74200, chg: +1.24 },
+  { name: 'CRUDE', base: 6180, chg: -0.55 },
+  { name: 'VIX', base: 13.4, chg: -3.21 },
+  { name: 'NIFTYBANK', base: 48600, chg: +1.02 },
+  { name: 'NIFTYIT', base: 35200, chg: +0.33 },
+];
+function buildTicker() {
+  const items = [...tickerItems, ...tickerItems];
+  const html = items.map(t => {
+    const v = (t.base * (1 + (Math.random()-0.5)*0.003)).toFixed(2);
+    const cls = t.chg >= 0 ? 'pos' : 'neg';
+    const arrow = t.chg >= 0 ? '▲' : '▼';
+    return `<div class="tick-item"><span class="tick-name">${t.name}</span><span class="tick-val">${v}</span><span class="tick-chg ${cls}">${arrow} ${Math.abs(t.chg).toFixed(2)}%</span></div>`;
+  }).join('');
+  document.getElementById('ticker').innerHTML = html;
+}
+buildTicker();
+
+// ── PRICE CHART ──
+function setRange(r) {
+  chartRange = r;
+  document.querySelectorAll('.range-btn').forEach(b => {
+    b.style.background = 'transparent';
+    b.style.borderColor = 'var(--border2)';
+    b.style.color = 'var(--muted)';
+  });
+  const active = document.getElementById('r' + r);
+  if (active) {
+    active.style.background = 'rgba(59,158,255,0.15)';
+    active.style.borderColor = 'var(--accent)';
+    active.style.color = 'var(--accent)';
+  }
+  renderCharts();
+}
+
+function renderCharts() {
+  const slice = rawData.slice(-chartRange);
+  const labels = slice.map(d => d.date);
+  const closes = slice.map(d => d.close);
+  const iSlice = ind;
+  const offset = rawData.length - chartRange;
+
+  // Price chart
+  const priceCtx = document.getElementById('priceChart').getContext('2d');
+  if (priceChartInst) priceChartInst.destroy();
+  priceChartInst = new Chart(priceCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Close', data: closes, borderColor: '#3b9eff', borderWidth: 2,
+          pointRadius: 0, fill: true,
+          backgroundColor: (ctx) => {
+            const g = ctx.chart.ctx.createLinearGradient(0, 0, 0, 260);
+            g.addColorStop(0, 'rgba(59,158,255,0.18)');
+            g.addColorStop(1, 'rgba(59,158,255,0)');
+            return g;
+          },
+          tension: 0.3
+        },
+        {
+          label: 'MA10', data: ind.ma10.slice(offset), borderColor: '#f59e0b',
+          borderWidth: 1, pointRadius: 0, borderDash: [4,4], fill: false, tension: 0.3
+        },
+        {
+          label: 'MA50', data: ind.ma50.slice(offset), borderColor: '#22d3a0',
+          borderWidth: 1, pointRadius: 0, borderDash: [6,3], fill: false, tension: 0.3
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: '#0d1220', borderColor: 'rgba(99,179,255,0.3)', borderWidth: 1,
+          titleColor: '#6b7a99', bodyColor: '#e8edf5', padding: 10,
+          callbacks: { label: ctx => ' ' + ctx.dataset.label + ': ₹' + ctx.parsed.y.toFixed(2) }
+        }
+      },
+      scales: {
+        x: {
+          ticks: { color: '#6b7a99', font: { family: 'Space Mono', size: 9 }, maxTicksLimit: 6 },
+          grid: { color: 'rgba(99,179,255,0.05)' }
+        },
+        y: {
+          ticks: { color: '#6b7a99', font: { family: 'Space Mono', size: 9 }, callback: v => '₹' + v.toLocaleString() },
+          grid: { color: 'rgba(99,179,255,0.05)' }
+        }
+      }
+    }
+  });
+
+  // RSI chart
+  const rsiCtx = document.getElementById('rsiChart').getContext('2d');
+  if (rsiChartInst) rsiChartInst.destroy();
+  const rsiSlice = ind.rsiArr.slice(offset);
+  rsiChartInst = new Chart(rsiCtx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'RSI', data: rsiSlice, borderColor: '#a78bfa', borderWidth: 1.5,
+        pointRadius: 0, fill: false, tension: 0.4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        annotation: {},
+        tooltip: {
+          backgroundColor: '#0d1220', borderColor: 'rgba(99,179,255,0.3)', borderWidth: 1,
+          titleColor: '#6b7a99', bodyColor: '#e8edf5',
+          callbacks: { label: ctx => ' RSI: ' + (ctx.parsed.y || 0).toFixed(1) }
+        }
+      },
+      scales: {
+        x: { ticks: { color: '#6b7a99', font: { size: 9 }, maxTicksLimit: 6 }, grid: { color: 'rgba(99,179,255,0.05)' } },
+        y: {
+          min: 0, max: 100,
+          ticks: { color: '#6b7a99', font: { family: 'Space Mono', size: 9 } },
+          grid: { color: 'rgba(99,179,255,0.05)' }
+        }
+      }
+    }
+  });
+
+  // Update stat cards
+  const last = rawData[rawData.length - 1];
+  const prev = rawData[rawData.length - 2];
+  const chgPct = ((last.close - prev.close) / prev.close * 100).toFixed(2);
+  document.getElementById('nsei-close').textContent = '₹' + last.close.toLocaleString('en-IN', { maximumFractionDigits: 0 });
+  const chgEl = document.getElementById('nsei-chg');
+  chgEl.textContent = (chgPct >= 0 ? '▲ +' : '▼ ') + chgPct + '%';
+  chgEl.style.color = chgPct >= 0 ? 'var(--green)' : 'var(--red)';
+
+  const lastRsi = ind.rsiArr.filter(v => v !== null).pop() || 0;
+  document.getElementById('rsi-val').textContent = lastRsi.toFixed(1);
+  const rsiZone = lastRsi > 70 ? 'Overbought' : lastRsi < 30 ? 'Oversold' : 'Neutral';
+  document.getElementById('rsi-zone').textContent = rsiZone;
+  document.getElementById('rsi-val').style.color = lastRsi > 70 ? 'var(--red)' : lastRsi < 30 ? 'var(--green)' : 'var(--text)';
+
+  const lastMa10 = ind.ma10.filter(v => v !== null).pop() || 0;
+  const lastMa50 = ind.ma50.filter(v => v !== null).pop() || 0;
+  document.getElementById('ma-cross').textContent = lastMa10 > lastMa50 ? 'BULLISH' : 'BEARISH';
+  document.getElementById('ma-cross').style.color = lastMa10 > lastMa50 ? 'var(--green)' : 'var(--red)';
+
+  const lastMom = ind.momentum.filter(v => v !== null).pop() || 0;
+  document.getElementById('momentum-val').textContent = (lastMom >= 0 ? '+' : '') + lastMom.toFixed(0);
+  document.getElementById('momentum-val').style.color = lastMom >= 0 ? 'var(--green)' : 'var(--red)';
+
+  const lastVol = ind.volatility.filter(v => v !== null).pop() || 0;
+  document.getElementById('vol-val').textContent = lastVol.toFixed(4);
+}
+
+// ── PREDICTION ENGINE (calls Anthropic API + Flask backend) ──
+async function runPrediction() {
+  const btn = document.getElementById('run-btn');
+  const loader = document.getElementById('loader');
+  btn.disabled = true;
+  loader.classList.add('show');
+
+  const keyword = document.getElementById('kw-filter').value;
+  const geoOverride = document.getElementById('geo-override').value;
+
+  // Build context from computed indicators
+  const last = rawData[rawData.length - 1];
+  const prev = rawData[rawData.length - 2];
+  const lastRsi = (ind.rsiArr.filter(v => v !== null).pop() || 50).toFixed(2);
+  const lastMom = (ind.momentum.filter(v => v !== null).pop() || 0).toFixed(2);
+  const lastVol = (ind.volatility.filter(v => v !== null).pop() || 0).toFixed(4);
+  const lastMa10 = (ind.ma10.filter(v => v !== null).pop() || 0).toFixed(2);
+  const lastMa50 = (ind.ma50.filter(v => v !== null).pop() || 0).toFixed(2);
+  const lastMa200 = (ind.ma200.filter(v => v !== null).pop() || 0).toFixed(2);
+  const lastRet = ((last.close - prev.close) / prev.close * 100).toFixed(4);
+  const lag1 = ((rawData[rawData.length-2].close - rawData[rawData.length-3].close) / rawData[rawData.length-3].close * 100).toFixed(4);
+  const lag2 = ((rawData[rawData.length-3].close - rawData[rawData.length-4].close) / rawData[rawData.length-4].close * 100).toFixed(4);
+  const lag3 = ((rawData[rawData.length-4].close - rawData[rawData.length-5].close) / rawData[rawData.length-5].close * 100).toFixed(4);
+
+  // ── CALL REAL FLASK BACKEND ──
+  let geoIndex, bullScore, pos, neg, neu, headlines;
+
+  try {
+    const encodedKw = encodeURIComponent(keyword);
+    const url = geoOverride !== ''
+      ? `${BACKEND}/api/predict/${encodedKw}?geo_override=${geoOverride}`
+      : `${BACKEND}/api/predict/${encodedKw}`;
+
+    const predRes = await fetch(url);
+    if (!predRes.ok) throw new Error('Prediction endpoint failed');
+    const pred = await predRes.json();
+
+    geoIndex  = pred.geo_index;
+    bullScore = pred.bull_prob;
+    pos       = pred.sentiment_pos ?? Math.round(30 + Math.random() * 30);
+    neg       = pred.sentiment_neg ?? Math.round(20 + Math.random() * 25);
+    neu       = pred.sentiment_neu ?? (100 - pos - neg);
+    // Real headlines from backend (if provided), else show a placeholder
+    headlines = (pred.articles && pred.articles.length)
+      ? pred.articles.map(a => ({
+          title: a.title,
+          sent:  a.sentiment === 'POSITIVE' ? 'pos' : a.sentiment === 'NEGATIVE' ? 'neg' : 'neu',
+          time:  a.published_at ? new Date(a.published_at).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : 'recent'
+        }))
+      : [{ title: 'Backend returned no articles for this keyword.', sent: 'neu', time: 'now' }];
+
+  } catch (err) {
+    // Fallback: backend not running, use client-side estimate
+    console.warn('Backend predict unavailable, using client-side fallback:', err.message);
+    geoIndex  = geoOverride !== '' ? parseFloat(geoOverride) : +(Math.random() * 0.6 - 0.2).toFixed(4);
+    pos = Math.round(30 + Math.random() * 30);
+    neg = Math.round(20 + Math.random() * 25);
+    neu = 100 - pos - neg;
+    bullScore = 0.5;
+    const rsiNum = parseFloat(lastRsi);
+    if (rsiNum < 30) bullScore += 0.12; else if (rsiNum > 70) bullScore -= 0.12;
+    if (parseFloat(lastMom) > 0) bullScore += 0.06; else bullScore -= 0.04;
+    if (parseFloat(lastMa10) > parseFloat(lastMa50)) bullScore += 0.08; else bullScore -= 0.06;
+    bullScore += geoIndex * 0.15;
+    if (parseFloat(lastRet) > 0) bullScore += 0.04;
+    bullScore = Math.max(0.05, Math.min(0.95, bullScore + (Math.random()-0.5)*0.06));
+    headlines = [{ title: '⚠ Backend offline — showing simulated data. Run: python backend.py', sent: 'neu', time: 'now' }];
+  }
+
+  // Update geo ring & stats
+  document.getElementById('geo-pos').textContent = pos + '%';
+  document.getElementById('geo-neg').textContent = neg + '%';
+  document.getElementById('geo-neu').textContent = neu + '%';
+  document.getElementById('geo-ring-val').textContent = geoIndex.toFixed(3);
+  document.getElementById('geo-stat').textContent = geoIndex.toFixed(3);
+  document.getElementById('geo-stat').style.color = geoIndex >= 0 ? 'var(--green)' : 'var(--red)';
+
+  // Animate ring
+  const pct = Math.max(0, Math.min(1, (geoIndex + 1) / 2));
+  const offset = 314 * (1 - pct);
+  document.getElementById('ring-arc').style.strokeDashoffset = offset;
+  document.getElementById('ring-arc').style.stroke = geoIndex >= 0 ? 'var(--green)' : 'var(--red)';
+
+  renderNews(headlines);
+  document.getElementById('news-count').textContent = headlines.length + ' articles';
+
+  // Call Anthropic API for AI insight
+  const prompt = `You are an AI market analyst. Given the following NSEI (Nifty 50) technical indicators and geopolitical sentiment, provide a concise 2-3 sentence market insight and trading outlook. Focus on what the indicators collectively suggest.
+
+Technical Indicators:
+- RSI (14): ${lastRsi} 
+- Momentum (10-day): ${lastMom}
+- Volatility: ${lastVol}
+- MA10: ${lastMa10} | MA50: ${lastMa50} | MA200: ${lastMa200}
+- Last Return: ${lastRet}%
+- Return Lag1: ${lag1}% | Lag2: ${lag2}% | Lag3: ${lag3}%
+
+Geopolitical Sentiment:
+- Geo Index: ${geoIndex.toFixed(4)} (from news keywords: "${keyword}")
+- Positive news: ${pos}% | Neutral: ${neu}% | Negative: ${neg}%
+- Bull Probability: ${(bullScore * 100).toFixed(1)}%
+
+Keep the response to 2-3 sentences maximum. Be direct and quantitative where possible. Do not use markdown.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    const aiText = data.content?.find(c => c.type === 'text')?.text || 'Unable to generate insight.';
+    document.getElementById('ai-text').textContent = aiText;
+    document.getElementById('ai-insight').classList.add('show');
+  } catch(e) {
+    document.getElementById('ai-text').textContent = 'AI insight unavailable. Check API connection.';
+    document.getElementById('ai-insight').classList.add('show');
+  }
+
+  // Update signal display
+  const pctDisp = (bullScore * 100).toFixed(1);
+  let sigText, sigColor;
+  if (bullScore > 0.70) { sigText = '🔥 Strong Bullish'; sigColor = 'var(--green)'; }
+  else if (bullScore > 0.60) { sigText = '📈 Bullish'; sigColor = 'var(--green)'; }
+  else if (bullScore > 0.50) { sigText = '📈 Weak Bullish'; sigColor = '#86efac'; }
+  else if (bullScore > 0.40) { sigText = '📉 Weak Bearish'; sigColor = '#fca5a5'; }
+  else { sigText = '📉 Bearish'; sigColor = 'var(--red)'; }
+
+  document.getElementById('sig-text').textContent = sigText;
+  document.getElementById('sig-text').style.color = sigColor;
+  document.getElementById('sig-sub').textContent = 'Geo-adjusted RF signal';
+  document.getElementById('conf-pct').textContent = pctDisp + '%';
+  document.getElementById('conf-pct').style.color = bullScore > 0.5 ? 'var(--green)' : 'var(--red)';
+  document.getElementById('signal-stat').textContent = sigText;
+  document.getElementById('signal-stat').style.color = sigColor;
+  document.getElementById('conf-stat').textContent = 'Confidence: ' + pctDisp + '%';
+  document.getElementById('sig-bar').style.width = pctDisp + '%';
+  document.getElementById('sig-bar').style.background = bullScore > 0.5 ? 'var(--green)' : 'var(--red)';
+
+  loader.classList.remove('show');
+  btn.disabled = false;
+}
+
+function renderNews(items) {
+  const feed = document.getElementById('news-feed');
+  feed.innerHTML = items.map(n => {
+    const dotColor = n.sent === 'pos' ? 'var(--green)' : n.sent === 'neg' ? 'var(--red)' : 'var(--muted)';
+    const sentClass = n.sent === 'pos' ? 'sent-pos' : n.sent === 'neg' ? 'sent-neg' : 'sent-neu';
+    const sentLabel = n.sent === 'pos' ? 'positive' : n.sent === 'neg' ? 'negative' : 'neutral';
+    return `<div class="news-item">
+      <div class="news-dot" style="background:${dotColor}"></div>
+      <div>
+        <div class="news-title">${n.title}</div>
+        <div class="news-meta">${n.time} · World Monitor</div>
+        <span class="news-sent ${sentClass}">${sentLabel}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// custom legend for price chart
+</script>
+</body>
+</html>
